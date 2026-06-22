@@ -41,10 +41,14 @@ const STATE = {
   LOSE: "lose",
 };
 
+// door display size (original is ~2000x3261)
+const DOOR_W = 55;
+const DOOR_H = 90;
+
 const SEASICK_MAX = 100;
-const SEASICK_RATE = 0.20;     // gain per frame while moving
-const SEASICK_DECAY = 0.005;   // loss per frame while still
-const FAINT_FLASHES = 6;       // total flash count before restart
+const SEASICK_RATE = 0.15; // gain per frame while moving
+const SEASICK_DECAY = 0.005; // loss per frame while still
+const FAINT_FLASHES = 6; // total flash count before restart
 const FAINT_FLASH_FRAMES = 12; // frames per flash
 
 const LEVELS = [
@@ -64,6 +68,8 @@ const LEVELS = [
       { x: 0, y: 510, w: 270, h: 16 },
       { x: 577, y: 499, w: 292, h: 16 },
     ],
+    spawnDoor: { x: 13, y: 216 },
+    exitDoor: { x: CANVAS_WIDTH - DOOR_W, y: CANVAS_HEIGHT - DOOR_H },
   },
   {
     name: "Level 2 — Pressure",
@@ -104,9 +110,16 @@ let player = {
 
 let characterSheet;
 let levelImages = [];
+let imgDoorClosed;
+let imgDoorOpen;
+let exitDoorOpen = false;
+let winDelayTimer = 0;
+const WIN_DELAY_FRAMES = 90; // 2 seconds at 60fps
 
 function preload() {
   characterSheet = loadImage("assets/images/spritesheet.png");
+  imgDoorClosed = loadImage("assets/images/doorclose.png");
+  imgDoorOpen = loadImage("assets/images/dooropen.png");
 
   for (let i = 0; i < LEVELS.length; i++) {
     if (LEVELS[i].background) {
@@ -131,7 +144,12 @@ function draw() {
   } else if (gameState === STATE.PLAYING) {
     drawLevel();
     drawPlatforms();
+    drawDoors();
     handleInput();
+    if (winDelayTimer > 0) {
+      winDelayTimer--;
+      if (winDelayTimer === 0) gameState = STATE.WIN;
+    }
     updateSeasickness();
     resolveHorizontalCollisions();
     applyPhysics();
@@ -142,6 +160,7 @@ function draw() {
   } else if (gameState === STATE.FAINTING) {
     drawLevel();
     drawPlatforms();
+    drawDoors();
     updateFainting();
     drawCharacter();
     drawHUD();
@@ -166,6 +185,8 @@ function loadLevel(index) {
   player.faintTimer = 0;
   player.faintFlash = 0;
   player.visible = true;
+  exitDoorOpen = false;
+  winDelayTimer = 0;
 }
 
 function drawLevel() {
@@ -302,13 +323,46 @@ function drawPlatforms() {
   let platforms = LEVELS[currentLevel].platforms || [];
   push();
   rectMode(CORNER);
-  fill(120, 220, 110);
-  stroke(40, 120, 50);
+  fill(101, 67, 33);
+  stroke(60, 35, 10);
   strokeWeight(2);
   for (let i = 0; i < platforms.length; i++) {
     let p = platforms[i];
     rect(p.x, p.y, p.w, p.h);
   }
+  pop();
+}
+
+function drawDoors() {
+  let level = LEVELS[currentLevel];
+  if (!level.spawnDoor || !level.exitDoor) return;
+
+  push();
+  imageMode(CORNER);
+
+  // spawn door — always closed, decorative
+  image(imgDoorClosed, level.spawnDoor.x, level.spawnDoor.y, DOOR_W, DOOR_H);
+
+  // exit door — open or closed
+  let ex = level.exitDoor.x;
+  let ey = level.exitDoor.y;
+  image(exitDoorOpen ? imgDoorOpen : imgDoorClosed, ex, ey, DOOR_W, DOOR_H);
+
+  // "Press E to open" label above exit door
+  if (!exitDoorOpen) {
+    let labelX = ex + DOOR_W / 2;
+    let labelY = ey - 14;
+    textSize(11);
+    textAlign(CENTER, BOTTOM);
+    strokeWeight(3);
+    stroke(0);
+    fill(0);
+    text("Press E to open", labelX, labelY);
+    noStroke();
+    fill(255);
+    text("Press E to open", labelX, labelY);
+  }
+
   pop();
 }
 
@@ -371,9 +425,9 @@ function drawHUD() {
   text(LEVELS[currentLevel].name, 16, 16);
 
   // seasickness meter
-  let meterX = CANVAS_WIDTH - 170;
+  let meterX = CANVAS_WIDTH - 320;
   let meterY = 16;
-  let meterW = 150;
+  let meterW = 300;
   let meterH = 18;
   let fill_pct = player.seasickness / SEASICK_MAX;
 
@@ -455,6 +509,18 @@ function keyPressed() {
       gameState = STATE.PLAYING;
     }
   } else if (gameState === STATE.PLAYING) {
+    if (keyCode === 69) {
+      // E — interact with exit door
+      let level = LEVELS[currentLevel];
+      if (level.exitDoor) {
+        let ex = level.exitDoor.x + DOOR_W / 2;
+        let ey = level.exitDoor.y + DOOR_H / 2;
+        if (abs(player.x - ex) < 50 && abs(player.y - ey) < 70) {
+          exitDoorOpen = true;
+          winDelayTimer = WIN_DELAY_FRAMES;
+        }
+      }
+    }
     if (keyCode === 78) {
       if (currentLevel < LEVELS.length - 1) {
         loadLevel(currentLevel + 1);
