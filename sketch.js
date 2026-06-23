@@ -88,21 +88,25 @@ const LEVELS = [
     name: "Level 1 — Learning",
     background: "assets/images/lvl1background.png",
     backgroundColor: [150, 75, 0],
-    start: { x: 40, y: 278 },
+    start: { x: 40, y: 200 },
     platforms: [
       { x: 0, y: 306, w: 250, h: 16 },
-      { x: 344, y: 250, w: 110, h: 16 },
-      { x: 273, y: 350, w: 281, h: 16 },
-      { x: 548, y: 306, w: 278, h: 16 },
-      { x: 293, y: 460, w: 100, h: 16 },
-      { x: 445, y: 490, w: 100, h: 16 },
-      { x: 849, y: 450, w: 111, h: 16 },
+      { x: 234, y: 306, w: 16, h: 60 }, //vertical wall 1.1
+      { x: 330, y: 250, w: 130, h: 16 }, //floating platform
+      { x: 250, y: 350, w: 300, h: 16 }, //spike platform
+      { x: 546, y: 306, w: 16, h: 60 }, //vertical wall 1.2
+      { x: 548, y: 306, w: 278, h: 16 }, //after spike platform
+      { x: 283, y: 430, w: 100, h: 16 }, //floating staircase 2
+      { x: 400, y: 490, w: 100, h: 16 }, //floating staircase 1
+      { x: 850, y: 394, w: 16, h: 140 }, //vertical wall 3
+      { x: 849, y: 390, w: 111, h: 16 }, //top of vertical wall 3
       { x: 0, y: 540, w: 270, h: 16 },
-      { x: 577, y: 529, w: 292, h: 16 },
+      { x: 577, y: 529, w: 292, h: 16 }, //floating staircase 1
+      { x: 0, y: CANVAS_HEIGHT - 16, w: CANVAS_WIDTH, h: 16 },
     ],
-    spikes: [{ x: 273, y: 350, w: 281 }],
-    spawnDoor: { x: 13, y: 216 },
-    exitDoor: { x: CANVAS_WIDTH - DOOR_W, y: CANVAS_HEIGHT - DOOR_H },
+    spikes: [{ x: 254, y: 350, w: 295 }],
+    spawnDoor: { x: 13, y: 228 },
+    exitDoor: { x: CANVAS_WIDTH - DOOR_W - 20, y: CANVAS_HEIGHT - DOOR_H - 3 },
   },
   {
     name: "Level 2 — Pressure",
