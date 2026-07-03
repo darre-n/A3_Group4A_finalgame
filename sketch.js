@@ -79,10 +79,21 @@ function updateCamera() {
 }
 
 function beginCameraView() {
+  // Seasickness sway — a gentle wobble layered on top of the followed
+  // position at render time only, so it doesn't feed back into the
+  // camera's own follow/lerp state.
+  let wobbleX = 0;
+  let wobbleY = 0;
+  let tier = getSeasickTier();
+  if (tier) {
+    wobbleX = sin(frameCount * tier.wobbleFreq) * tier.wobbleAmp;
+    wobbleY = cos(frameCount * tier.wobbleFreq * 0.8) * tier.wobbleAmp * 0.6;
+  }
+
   push();
   translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
   scale(CAMERA.zoom);
-  translate(-camera.x, -camera.y);
+  translate(-(camera.x + wobbleX), -(camera.y + wobbleY));
 }
 
 function endCameraView() {
@@ -115,14 +126,19 @@ const SEASICK_DECAY = 0.005; // loss per frame while still
 const FAINT_FLASHES = 6; // total flash count before restart
 const FAINT_FLASH_FRAMES = 12; // frames per flash
 
-// Seasickness "jolt" — past these thresholds the player sprite stutters
-// side to side a little, growing worse as the meter fills further.
+// Seasickness effects — past these thresholds the player moves sluggishly
+// and the camera sways a little, growing worse as the meter fills further.
 const SEASICK_LAG_TIER1 = SEASICK_MAX / 3;
 const SEASICK_LAG_TIER2 = (SEASICK_MAX * 2) / 3;
 const SEASICK_LAG_TIERS = [
-  { threshold: SEASICK_LAG_TIER2, period: 4, amp: 14 }, // 2/3 full — fast, big jolt
-  { threshold: SEASICK_LAG_TIER1, period: 8, amp: 6 }, // 1/3 full — noticeable jolt
+  { threshold: SEASICK_LAG_TIER2, speedMultiplier: 0.35, wobbleAmp: 8, wobbleFreq: 0.35 }, // 2/3 full — very sluggish, heavy sway
+  { threshold: SEASICK_LAG_TIER1, speedMultiplier: 0.65, wobbleAmp: 3, wobbleFreq: 0.2 }, // 1/3 full — noticeably slower, slight sway
 ];
+
+// Returns the active tier config for the player's current seasickness, or null.
+function getSeasickTier() {
+  return SEASICK_LAG_TIERS.find((t) => player.seasickness >= t.threshold) || null;
+}
 
 // ── Intro / start-screen ship scene ────────────────────────────────────────
 const INTRO = {
@@ -230,8 +246,6 @@ let player = {
   faintTimer: 0,
   faintFlash: 0,
   visible: true,
-  joltOffset: 0,
-  joltTimer: 0,
 };
 
 let rat = { x: 0, dir: 1, active: false };
@@ -299,8 +313,6 @@ function initIntroPlayer() {
   player.faintTimer = 0;
   player.faintFlash = 0;
   player.visible = true;
-  player.joltOffset = 0;
-  player.joltTimer = 0;
   introDoorOpen = false;
   introDelayTimer = 0;
 }
@@ -590,8 +602,6 @@ function loadLevel(index) {
   player.faintTimer = 0;
   player.faintFlash = 0;
   player.visible = true;
-  player.joltOffset = 0;
-  player.joltTimer = 0;
 
   let ratData = LEVELS[index].rat;
   if (ratData) {
@@ -631,13 +641,16 @@ function drawLevel() {
 function handleInput() {
   player.isMoving = false;
 
+  let tier = getSeasickTier();
+  let speed = player.speed * (tier ? tier.speedMultiplier : 1);
+
   if (keyIsDown(65)) {
-    player.x -= player.speed;
+    player.x -= speed;
     player.direction = "left";
     player.isMoving = true;
   }
   if (keyIsDown(68)) {
-    player.x += player.speed;
+    player.x += speed;
     player.direction = "right";
     player.isMoving = true;
   }
@@ -659,30 +672,6 @@ function updateSeasickness() {
   if (player.seasickness >= SEASICK_MAX) {
     player.seasickness = SEASICK_MAX;
     triggerFaint();
-  }
-
-  updateSeasickJolt();
-}
-
-// Stutters the drawn sprite side to side once seasickness crosses a tier
-// threshold — the offset holds steady between ticks so it reads as a lag
-// spike rather than a smooth wobble, and gets faster/bigger at higher tiers.
-function updateSeasickJolt() {
-  let tier = SEASICK_LAG_TIERS.find((t) => player.seasickness >= t.threshold);
-
-  if (!tier) {
-    player.joltOffset = 0;
-    player.joltTimer = 0;
-    return;
-  }
-
-  player.joltTimer++;
-  if (player.joltTimer >= tier.period) {
-    player.joltTimer = 0;
-    // Snap to a new offset every tick, alternating side so it always
-    // reads as a visible kick rather than sometimes rolling near zero.
-    let sign = player.joltOffset <= 0 ? 1 : -1;
-    player.joltOffset = sign * random(tier.amp * 0.6, tier.amp);
   }
 }
 
@@ -979,7 +968,7 @@ function drawCharacter() {
 
   image(
     characterSheet,
-    player.x + player.joltOffset,
+    player.x,
     player.y,
     dw,
     dh,
