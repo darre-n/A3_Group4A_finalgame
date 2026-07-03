@@ -7,8 +7,6 @@
 // Set to false once hitbox positions look right
 const DEBUG_HITBOXES = false;
 
-print("hello world");
-
 const SPRITE = {
   frameWidth: 171,
   frameHeight: 257,
