@@ -78,7 +78,7 @@ function updateCamera() {
   camera.y = constrain(camera.y, halfH, CANVAS_HEIGHT - halfH);
 }
 
-function beginCameraView() {
+function beginCameraView(zoom = CAMERA.zoom) {
   // Seasickness sway — a gentle wobble layered on top of the followed
   // position at render time only, so it doesn't feed back into the
   // camera's own follow/lerp state.
@@ -92,7 +92,7 @@ function beginCameraView() {
 
   push();
   translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-  scale(CAMERA.zoom);
+  scale(zoom);
   translate(-(camera.x + wobbleX), -(camera.y + wobbleY));
 }
 
@@ -183,7 +183,8 @@ const INTRO = {
 // ship (trees + railing). The tutorial framing isn't a separate constant:
 // it's just wherever the player spawns, since updateCamera() eases toward
 // the player once STATE.START begins, producing the pan.
-const INTRO_SPLASH_VIEW = { x: 700, y: 180 };
+const INTRO_SPLASH_VIEW = { x: 270, y: 180 };
+const SPLASH_ZOOM = 1.6; // independent of CAMERA.zoom, used for levels/tutorial
 
 const LEVELS = [
   {
@@ -496,10 +497,14 @@ function drawIntroWorld() {
 // Title card — a fixed zoomed-in shot of the upper part of the ship (same
 // zoom the levels use), with the logo and prompt overlaid on top, unzoomed.
 function drawSplashScreen() {
-  camera.x = INTRO_SPLASH_VIEW.x;
-  camera.y = INTRO_SPLASH_VIEW.y;
+  // Clamped the same way updateCamera() clamps the level camera, so this
+  // fixed framing stays within the world bounds regardless of zoom.
+  let halfW = CANVAS_WIDTH / SPLASH_ZOOM / 2;
+  let halfH = CANVAS_HEIGHT / SPLASH_ZOOM / 2;
+  camera.x = constrain(INTRO_SPLASH_VIEW.x, halfW, CANVAS_WIDTH - halfW);
+  camera.y = constrain(INTRO_SPLASH_VIEW.y, halfH, CANVAS_HEIGHT - halfH);
 
-  beginCameraView();
+  beginCameraView(SPLASH_ZOOM);
   drawIntroWorld();
   endCameraView();
 
