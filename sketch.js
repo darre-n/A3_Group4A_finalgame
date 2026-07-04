@@ -82,6 +82,7 @@ function updateCamera(
   smoothing = CAMERA.smoothing,
   anchorX = CANVAS_WIDTH / 2,
   anchorY = CANVAS_HEIGHT / 2,
+  zoom = CAMERA.zoom,
 ) {
   // Only re-target vertically when grounded, so jumps/falls don't pan the camera.
   if (player.onGround) {
@@ -93,10 +94,10 @@ function updateCamera(
 
   // World units visible on each side of camera.x/y given the anchor split —
   // symmetric halves when anchor is centered, matching the old behavior.
-  let leftW = anchorX / CAMERA.zoom;
-  let rightW = (CANVAS_WIDTH - anchorX) / CAMERA.zoom;
-  let topH = anchorY / CAMERA.zoom;
-  let bottomH = (CANVAS_HEIGHT - anchorY) / CAMERA.zoom;
+  let leftW = anchorX / zoom;
+  let rightW = (CANVAS_WIDTH - anchorX) / zoom;
+  let topH = anchorY / zoom;
+  let bottomH = (CANVAS_HEIGHT - anchorY) / zoom;
 
   camera.x = constrain(camera.x, leftW, CANVAS_WIDTH - rightW);
   camera.y = constrain(camera.y, topH, CANVAS_HEIGHT - bottomH);
@@ -218,6 +219,13 @@ const SPLASH_ZOOM = 1.6; // independent of CAMERA.zoom, used for levels/tutorial
 // upper-left instead of dead center, while still being followed exactly
 // the same way (see updateCamera()'s anchorX/anchorY params).
 const INTRO_CAMERA_ANCHOR = { x: CANVAS_WIDTH * 0.32, y: CANVAS_HEIGHT * 0.32 };
+
+// Independent of CAMERA.zoom (used for actual levels). The deck sits close
+// to the world's bottom edge, so at CAMERA.zoom the camera has to stay
+// pinned there to keep the player below the anchor point, which caps the
+// view well short of the railing above. A lower zoom here shows more of
+// the world vertically, revealing the railing/sky above the deck.
+const INTRO_TUTORIAL_ZOOM = 1.4;
 
 // The intro world is drawn at exactly the canvas's own dimensions, so a
 // zoom of 1 with a centered camera/anchor shows the entire background.
@@ -632,19 +640,35 @@ function drawIntroScreen() {
       INTRO_CAMERA_ANCHOR.y,
       INTRO_PAN_SMOOTHING,
     );
-    introView.zoom = lerp(introView.zoom, CAMERA.zoom, INTRO_PAN_SMOOTHING);
+    introView.zoom = lerp(introView.zoom, INTRO_TUTORIAL_ZOOM, INTRO_PAN_SMOOTHING);
 
-    updateCamera(INTRO_PAN_SMOOTHING, introView.anchorX, introView.anchorY);
-    // Once the camera has essentially caught up, hand off to the normal
-    // (snappier) follow speed for regular tutorial-area movement.
-    if (abs(camera.x - player.x) < 1 && abs(camera.y - camera.targetY) < 1) {
+    let prevCamX = camera.x;
+    let prevCamY = camera.y;
+    updateCamera(
+      INTRO_PAN_SMOOTHING,
+      introView.anchorX,
+      introView.anchorY,
+      introView.zoom,
+    );
+    // Once the camera has essentially stopped moving, hand off to the
+    // normal (snappier) follow speed for regular tutorial-area movement.
+    // Checking convergence (not distance to the raw target) matters here:
+    // the vertical target can sit past what the anchor/zoom clamp allows
+    // (the deck is close to the world's bottom edge), so camera.y settles
+    // at the clamp boundary rather than literally reaching camera.targetY.
+    if (abs(camera.x - prevCamX) < 0.05 && abs(camera.y - prevCamY) < 0.05) {
       introPhase = null;
       introView.anchorX = INTRO_CAMERA_ANCHOR.x;
       introView.anchorY = INTRO_CAMERA_ANCHOR.y;
-      introView.zoom = CAMERA.zoom;
+      introView.zoom = INTRO_TUTORIAL_ZOOM;
     }
   } else {
-    updateCamera(CAMERA.smoothing, introView.anchorX, introView.anchorY);
+    updateCamera(
+      CAMERA.smoothing,
+      introView.anchorX,
+      introView.anchorY,
+      introView.zoom,
+    );
   }
   beginCameraView(introView.zoom, introView.anchorX, introView.anchorY);
 
