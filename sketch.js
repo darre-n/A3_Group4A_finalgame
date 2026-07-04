@@ -131,13 +131,25 @@ const FAINT_FLASH_FRAMES = 12; // frames per flash
 const SEASICK_LAG_TIER1 = SEASICK_MAX / 3;
 const SEASICK_LAG_TIER2 = (SEASICK_MAX * 2) / 3;
 const SEASICK_LAG_TIERS = [
-  { threshold: SEASICK_LAG_TIER2, speedMultiplier: 0.7, wobbleAmp: 3, wobbleFreq: 0.22 }, // 2/3 full
-  { threshold: SEASICK_LAG_TIER1, speedMultiplier: 0.9, wobbleAmp: 1.5, wobbleFreq: 0.16 }, // 1/3 full
+  {
+    threshold: SEASICK_LAG_TIER2,
+    speedMultiplier: 0.7,
+    wobbleAmp: 3,
+    wobbleFreq: 0.22,
+  }, // 2/3 full
+  {
+    threshold: SEASICK_LAG_TIER1,
+    speedMultiplier: 0.9,
+    wobbleAmp: 1.5,
+    wobbleFreq: 0.16,
+  }, // 1/3 full
 ];
 
 // Returns the active tier config for the player's current seasickness, or null.
 function getSeasickTier() {
-  return SEASICK_LAG_TIERS.find((t) => player.seasickness >= t.threshold) || null;
+  return (
+    SEASICK_LAG_TIERS.find((t) => player.seasickness >= t.threshold) || null
+  );
 }
 
 // ── Intro / start-screen ship scene ────────────────────────────────────────
@@ -145,7 +157,7 @@ const INTRO = {
   // The deck platform the player stands on (tiled with platform_tile.png)
   // x: horizontal position, y: vertical position
   // tilesW: width in tiles, tilesH: height in tiles (each tile is 16px)
-  platform: { x: 480, y: 464, tilesW: 16, tilesH: 1 },
+  platform: { x: 480, y: 500, tilesW: 16, tilesH: 1 },
   platform2: { x: 565, y: CANVAS_HEIGHT - 16, tilesW: 26, tilesH: 1 }, // right half, bottom
 
   // Outer-shell walls — stepped rectangles tracing the curved hull left edge.
@@ -157,10 +169,9 @@ const INTRO = {
   ],
 
   // Decorations — positioned on the deck inside the hull boundary
-  hammock: { x: 540, y: 380, w: 140, h: 75 },
-  parrot: { x: 590, y: 380, w: 48, h: 48 },
+  hammock: { x: 540, y: 380, w: 200, h: 120 },
 
-  // Door at the bottom-right; press E near it to enter Level 1
+  // Door at the bottom-right; opens automatically once the player reaches it
   door: { x: CANVAS_WIDTH - DOOR_W - 8, y: CANVAS_HEIGHT - DOOR_H - 8 },
 
   // Player spawns just above the deck
@@ -259,7 +270,6 @@ let imgBarrel;
 let imgDoorClosed;
 let imgDoorOpen;
 let imgHammock;
-let imgParrot;
 let imgLantern;
 let imgPlatformTile;
 let exitDoorOpen = false;
@@ -278,7 +288,6 @@ function preload() {
   imgDoorClosed = loadImage("assets/images/doorclose.png");
   imgDoorOpen = loadImage("assets/images/dooropen.png");
   imgHammock = loadImage("assets/images/hammock.png");
-  imgParrot = loadImage("assets/images/parrot.png");
   imgLantern = loadImage("assets/images/lantern.png");
   imgPlatformTile = loadImage("assets/images/platform_tile.png");
 
@@ -435,13 +444,6 @@ function drawIntroScreen() {
     INTRO.hammock.w,
     INTRO.hammock.h,
   );
-  image(
-    imgParrot,
-    INTRO.parrot.x,
-    INTRO.parrot.y,
-    INTRO.parrot.w,
-    INTRO.parrot.h,
-  );
   pop();
 
   // Platforms (always visible)
@@ -488,7 +490,7 @@ function drawIntroScreen() {
     pop();
   }
 
-  // Door — opens when E is pressed
+  // Door — opens automatically once the player overlaps it
   push();
   imageMode(CORNER);
   image(
@@ -500,12 +502,7 @@ function drawIntroScreen() {
   );
   pop();
 
-  // Interaction prompt above door (only when door is closed)
-  if (!introDoorOpen) {
-    let promptX = INTRO.door.x + DOOR_W / 2;
-    let promptY = INTRO.door.y - 20;
-    drawInteractionPrompt(promptX, promptY);
-  }
+  checkIntroDoor();
 
   // Handle intro door delay timer
   if (introDelayTimer > 0) {
@@ -524,6 +521,14 @@ function drawIntroScreen() {
   animateSprite();
 
   drawCharacter();
+}
+
+function checkIntroDoor() {
+  if (introDelayTimer > 0 || introDoorOpen) return;
+  if (playerOverlapsRect(INTRO.door.x, INTRO.door.y, DOOR_W, DOOR_H)) {
+    introDoorOpen = true;
+    introDelayTimer = WIN_DELAY_FRAMES;
+  }
 }
 
 function draw() {
@@ -886,13 +891,22 @@ function drawSpikes() {
   pop();
 }
 
+// True once the player's hitbox overlaps a rect of the given dimensions
+// (used for door auto-open triggers).
+function playerOverlapsRect(rx, ry, rw, rh) {
+  return (
+    player.x + player.hw > rx &&
+    player.x - player.hw < rx + rw &&
+    player.y + player.hh > ry &&
+    player.y - player.hh < ry + rh
+  );
+}
+
 function checkExitDoor() {
   if (winDelayTimer > 0 || exitDoorOpen) return;
   let level = LEVELS[currentLevel];
   if (!level.exitDoor) return;
-  let ex = level.exitDoor.x + DOOR_W / 2;
-  let ey = level.exitDoor.y + DOOR_H / 2;
-  if (abs(player.x - ex) < 50 && abs(player.y - ey) < 70) {
+  if (playerOverlapsRect(level.exitDoor.x, level.exitDoor.y, DOOR_W, DOOR_H)) {
     exitDoorOpen = true;
     winDelayTimer = EXIT_DELAY_FRAMES;
   }
@@ -1097,15 +1111,6 @@ function keyPressed() {
     if (keyCode === ENTER) {
       loadLevel(0);
       gameState = STATE.PLAYING;
-    }
-    // E = enter door if player is close enough (with delay animation)
-    if (keyCode === 69) {
-      let dx = INTRO.door.x + DOOR_W / 2;
-      let dy = INTRO.door.y + DOOR_H / 2;
-      if (abs(player.x - dx) < 60 && abs(player.y - dy) < 80) {
-        introDoorOpen = true;
-        introDelayTimer = WIN_DELAY_FRAMES;
-      }
     }
   } else if (gameState === STATE.PLAYING) {
     if (keyCode === 78) {
