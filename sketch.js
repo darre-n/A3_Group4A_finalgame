@@ -66,10 +66,15 @@ function resetCamera() {
   camera.targetY = player.y;
 }
 
-function updateCamera(smoothing = CAMERA.smoothing) {
-  let viewW = CANVAS_WIDTH / CAMERA.zoom;
-  let viewH = CANVAS_HEIGHT / CAMERA.zoom;
-
+// anchorX/anchorY is the screen point the tracked position renders at —
+// defaults to dead center (used by levels and the splash screen). Passing
+// an off-center anchor (e.g. for the intro tutorial) keeps the exact same
+// follow/lerp behavior, just renders the player somewhere else on screen.
+function updateCamera(
+  smoothing = CAMERA.smoothing,
+  anchorX = CANVAS_WIDTH / 2,
+  anchorY = CANVAS_HEIGHT / 2,
+) {
   // Only re-target vertically when grounded, so jumps/falls don't pan the camera.
   if (player.onGround) {
     camera.targetY = player.y;
@@ -78,13 +83,22 @@ function updateCamera(smoothing = CAMERA.smoothing) {
   camera.x = lerp(camera.x, player.x, smoothing);
   camera.y = lerp(camera.y, camera.targetY, smoothing);
 
-  let halfW = viewW / 2;
-  let halfH = viewH / 2;
-  camera.x = constrain(camera.x, halfW, CANVAS_WIDTH - halfW);
-  camera.y = constrain(camera.y, halfH, CANVAS_HEIGHT - halfH);
+  // World units visible on each side of camera.x/y given the anchor split —
+  // symmetric halves when anchor is centered, matching the old behavior.
+  let leftW = anchorX / CAMERA.zoom;
+  let rightW = (CANVAS_WIDTH - anchorX) / CAMERA.zoom;
+  let topH = anchorY / CAMERA.zoom;
+  let bottomH = (CANVAS_HEIGHT - anchorY) / CAMERA.zoom;
+
+  camera.x = constrain(camera.x, leftW, CANVAS_WIDTH - rightW);
+  camera.y = constrain(camera.y, topH, CANVAS_HEIGHT - bottomH);
 }
 
-function beginCameraView(zoom = CAMERA.zoom) {
+function beginCameraView(
+  zoom = CAMERA.zoom,
+  anchorX = CANVAS_WIDTH / 2,
+  anchorY = CANVAS_HEIGHT / 2,
+) {
   // Seasickness sway — a gentle wobble layered on top of the followed
   // position at render time only, so it doesn't feed back into the
   // camera's own follow/lerp state.
@@ -97,7 +111,7 @@ function beginCameraView(zoom = CAMERA.zoom) {
   }
 
   push();
-  translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+  translate(anchorX, anchorY);
   scale(zoom);
   translate(-(camera.x + wobbleX), -(camera.y + wobbleY));
 }
@@ -191,6 +205,11 @@ const INTRO = {
 // the player once STATE.START begins, producing the pan.
 const INTRO_SPLASH_VIEW = { x: 270, y: 180 };
 const SPLASH_ZOOM = 1.6; // independent of CAMERA.zoom, used for levels/tutorial
+
+// Screen anchor for the tutorial phase — the player renders toward the
+// upper-left instead of dead center, while still being followed exactly
+// the same way (see updateCamera()'s anchorX/anchorY params).
+const INTRO_CAMERA_ANCHOR = { x: CANVAS_WIDTH * 0.32, y: CANVAS_HEIGHT * 0.32 };
 
 const LEVELS = [
   {
@@ -527,9 +546,9 @@ function drawSplashScreen() {
 
   push();
   imageMode(CORNER);
-  let logoX = 40;
-  let logoY = 25;
-  let logoW = 400;
+  let logoX = CANVAS_WIDTH / 2 - 400;
+  let logoY = CANVAS_HEIGHT / 2 - 260;
+  let logoW = 600;
   let logoH = logoW * (imgLogo.height / imgLogo.width);
   image(imgLogo, logoX, logoY, logoW, logoH);
   pop();
@@ -552,17 +571,20 @@ function drawSplashScreen() {
 // which reads as a pan into this area and then tracks the player exactly
 // like a level would.
 function drawIntroScreen() {
+  let anchorX = INTRO_CAMERA_ANCHOR.x;
+  let anchorY = INTRO_CAMERA_ANCHOR.y;
+
   if (introPanning) {
-    updateCamera(INTRO_PAN_SMOOTHING);
+    updateCamera(INTRO_PAN_SMOOTHING, anchorX, anchorY);
     // Once the camera has essentially caught up, hand off to the normal
     // (snappier) follow speed for regular tutorial-area movement.
     if (abs(camera.x - player.x) < 1 && abs(camera.y - camera.targetY) < 1) {
       introPanning = false;
     }
   } else {
-    updateCamera();
+    updateCamera(CAMERA.smoothing, anchorX, anchorY);
   }
-  beginCameraView();
+  beginCameraView(CAMERA.zoom, anchorX, anchorY);
 
   drawIntroWorld();
   checkIntroDoor();
