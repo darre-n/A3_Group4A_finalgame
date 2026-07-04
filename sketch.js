@@ -53,6 +53,10 @@ const CAMERA = {
 // follow speed used once the camera has caught up to the player.
 const INTRO_PAN_SMOOTHING = 0.035;
 
+// Faster than INTRO_PAN_SMOOTHING — only used for the zoom-out-to-full-view
+// leg, so that leg is quicker while the pan into the tutorial stays slow.
+const INTRO_ZOOM_OUT_SMOOTHING = 0.09;
+
 // The Enter transition is two legs: first ease out to a full, centered
 // view of the whole ship (zoomOut), then ease from there into the
 // tutorial framing on the player (panIn). null = not transitioning.
@@ -594,11 +598,11 @@ function drawIntroScreen() {
     // Leg 1: ease out to a full, centered view of the whole ship. Camera
     // position, anchor, and zoom all ease toward the same fixed target so
     // the framing slides as one, not player-tracking yet.
-    camera.x = lerp(camera.x, INTRO_FULL_VIEW.x, INTRO_PAN_SMOOTHING);
-    camera.y = lerp(camera.y, INTRO_FULL_VIEW.y, INTRO_PAN_SMOOTHING);
-    introView.anchorX = lerp(introView.anchorX, INTRO_FULL_VIEW.x, INTRO_PAN_SMOOTHING);
-    introView.anchorY = lerp(introView.anchorY, INTRO_FULL_VIEW.y, INTRO_PAN_SMOOTHING);
-    introView.zoom = lerp(introView.zoom, INTRO_FULL_VIEW_ZOOM, INTRO_PAN_SMOOTHING);
+    camera.x = lerp(camera.x, INTRO_FULL_VIEW.x, INTRO_ZOOM_OUT_SMOOTHING);
+    camera.y = lerp(camera.y, INTRO_FULL_VIEW.y, INTRO_ZOOM_OUT_SMOOTHING);
+    introView.anchorX = lerp(introView.anchorX, INTRO_FULL_VIEW.x, INTRO_ZOOM_OUT_SMOOTHING);
+    introView.anchorY = lerp(introView.anchorY, INTRO_FULL_VIEW.y, INTRO_ZOOM_OUT_SMOOTHING);
+    introView.zoom = lerp(introView.zoom, INTRO_FULL_VIEW_ZOOM, INTRO_ZOOM_OUT_SMOOTHING);
 
     if (
       abs(camera.x - INTRO_FULL_VIEW.x) < 1 &&
