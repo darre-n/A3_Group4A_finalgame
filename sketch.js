@@ -182,6 +182,20 @@ function getSeasickTier() {
   );
 }
 
+// ── Screen shake state ──────────────────────────────────────────────────────
+let screenShakeIntensity = 0;
+let screenShakeTimer = 0;
+
+// ── Dialogue system state ───────────────────────────────────────────────────
+let dialogueActive = false;
+let dialogueCompleted = false;
+let dialogueIndex = 0;
+let dialogueCharIndex = 0;
+let dialoguePageOffset = 0;
+let dialogueLinesPerPage = 6;
+let dialogueFrameCounter = 0;
+const DIALOGUE_FRAMES_PER_CHAR = 2;
+
 // ── Intro / start-screen ship scene ────────────────────────────────────────
 const INTRO = {
   // The deck platform the player stands on (tiled with platform_tile.png)
@@ -207,6 +221,43 @@ const INTRO = {
   // Player spawns just above the deck
   playerStart: { x: 490, y: 430 },
 };
+
+// ── Intro dialogue lines ────────────────────────────────────────────────────
+const INTRO_DIALOGUE = [
+  { speaker: "PARROT", text: "*SQUAWK* Quiet morning… Hm…" },
+  { speaker: "PLAYER", text: "What are you on about?" },
+  {
+    speaker: "DIALOGUE",
+    text: "Harmonious singing echoes from the end of the ship, the [redacted]",
+  },
+  {
+    speaker: "DIALOGUE",
+    text: "It grows in volume, ringing through your head, but you can hardly think.",
+  },
+  { speaker: "DIALOGUE", text: "*THUMP THUMP*" },
+  { speaker: "DIALOGUE", text: "*BIG SPLASH*" },
+  { speaker: "PLAYER", text: "Wait wuh? What was that?" },
+  {
+    speaker: "PARROT",
+    text: "*CAW CAW* Sirens spotted at starboard, crew gone overboard!",
+  },
+  { speaker: "PLAYER", text: "Wait, what? Everyone?" },
+  { speaker: "PLAYER", text: "…" },
+  { speaker: "PLAYER", text: "Then who's at the helm??" },
+  {
+    speaker: "PARROT",
+    text: "*CAW* No one, you empty bucket! It's time to earn your sea legs!",
+  },
+  {
+    speaker: "PARROT",
+    text: "What are you waiting for? Get to the helm before we feed the fish!",
+  },
+  {
+    speaker: "PARROT",
+    text: "Use A <- and D -> to move left and right, and space to jump.",
+  },
+  { speaker: "PLAYER", text: "Argh, but I'm gonna get so seasick!" },
+];
 
 // Fixed camera framing for the splash/title screen — the upper part of the
 // ship (trees + railing). The tutorial framing isn't a separate constant:
@@ -244,7 +295,11 @@ let introView = {
 
 // Logo position — shared between the splash screen and its fade-out once
 // the tutorial begins, so both draw it in exactly the same spot.
-const INTRO_LOGO = { x: CANVAS_WIDTH / 2 - 400, y: CANVAS_HEIGHT / 2 - 260, w: 600 };
+const INTRO_LOGO = {
+  x: CANVAS_WIDTH / 2 - 400,
+  y: CANVAS_HEIGHT / 2 - 260,
+  w: 600,
+};
 let logoAlpha = 255;
 
 const LEVELS = [
@@ -288,7 +343,7 @@ const LEVELS = [
     ],
     spikes: [{ x: 432, y: 352, tilesW: 17 }],
     rat: { minX: 300, maxX: 455 },
-    spawnDoor: { x: 13, y: 228 },
+    spawnDoor: { x: 13, y: 227 },
     exitDoor: { x: CANVAS_WIDTH - DOOR_W - 20, y: CANVAS_HEIGHT - DOOR_H - 3 },
   },
   {
@@ -341,6 +396,11 @@ let imgDoorOpen;
 let imgHammock;
 let imgLantern;
 let imgPlatformTile;
+let imgDialogueGeneric;
+let imgDialogueParrot;
+let imgDialoguePirate;
+let soundBGM;
+let soundSeagulls;
 let exitDoorOpen = false;
 let introDoorOpen = false;
 let winDelayTimer = 0;
@@ -359,6 +419,11 @@ function preload() {
   imgHammock = loadImage("assets/images/hammock.png");
   imgLantern = loadImage("assets/images/lantern.png");
   imgPlatformTile = loadImage("assets/images/platform_tile.png");
+  imgDialogueGeneric = loadImage("assets/images/dialogue.png");
+  imgDialogueParrot = loadImage("assets/images/parrot_dialogue.png");
+  imgDialoguePirate = loadImage("assets/images/pirate_dialogue.png");
+  soundBGM = loadSound("assets/sounds/bgm.mp3");
+  soundSeagulls = loadSound("assets/sounds/seagulls.mp3");
 
   for (let i = 0; i < LEVELS.length; i++) {
     if (LEVELS[i].background) {
@@ -374,6 +439,27 @@ function setup() {
   imageMode(CENTER);
   textFont("Pixelify Sans");
   goToSplash();
+}
+
+// ── Sound management ───────────────────────────────────────────────────────
+// Call this whenever the game state changes. Stops the previous track and
+// starts the right one for the new state. Only plays the seagulls during
+// the splash / title screen; everywhere else (START, PLAYING, FAINTING,
+// WIN, LOSE) the BGM loop runs uninterrupted.
+function updateSounds() {
+  if (soundSeagulls?.isPlaying()) soundSeagulls.stop();
+  if (soundBGM?.isPlaying()) soundBGM.stop();
+
+  if (gameState === STATE.START) {
+    // Seagulls play during the intro / tutorial while the player is
+    // walking around on the ship deck.
+    soundSeagulls.loop();
+  } else if (gameState !== STATE.SPLASH) {
+    // Everything non-splash / non-start gets BGM: PLAYING, FAINTING,
+    // WIN, LOSE all keep the same music looping.
+    soundBGM.loop();
+  }
+  // SPLASH — silence, no conflict with browser autoplay.
 }
 
 // ── Intro scene helpers ─────────────────────────────────────────────────────
@@ -399,6 +485,7 @@ function initIntroPlayer() {
 function goToSplash() {
   initIntroPlayer();
   gameState = STATE.SPLASH;
+  updateSounds();
   camera.x = INTRO_SPLASH_VIEW.x;
   camera.y = INTRO_SPLASH_VIEW.y;
   introPhase = null;
@@ -406,6 +493,15 @@ function goToSplash() {
   introView.anchorY = CANVAS_HEIGHT / 2;
   introView.zoom = SPLASH_ZOOM;
   logoAlpha = 255;
+  // Reset dialogue state so it replays on a fresh start
+  dialogueActive = false;
+  dialogueCompleted = false;
+  dialogueIndex = 0;
+  dialogueCharIndex = 0;
+  dialoguePageOffset = 0;
+  dialogueFrameCounter = 0;
+  screenShakeIntensity = 0;
+  screenShakeTimer = 0;
 }
 
 function getIntroColliders() {
@@ -593,11 +689,224 @@ function drawSplashScreen() {
   push();
   textAlign(CENTER, CENTER);
   textSize(34);
-  strokeWeight(4);
+  strokeWeight(6);
   stroke(0);
-  fill(254, 232, 198);
+  fill(255);
   text("Press ENTER to start", CANVAS_WIDTH / 2 - 200, CANVAS_HEIGHT - 300);
   pop();
+}
+
+// ── Dialogue system ─────────────────────────────────────────────────────────
+
+// Returns the correct dialogue box image for a given speaker.
+function currentDialogueImage(speaker) {
+  if (speaker === "PARROT") return imgDialogueParrot;
+  if (speaker === "PLAYER") return imgDialoguePirate;
+  return imgDialogueGeneric;
+}
+
+// Wraps text into lines that fit within maxWidth using the dialogue font.
+function wrapTextForDialogue(txt, maxWidth) {
+  push();
+  textFont("Pixelify Sans");
+  textSize(30);
+  let words = txt.split(" ");
+  let lines = [];
+  let currentLine = "";
+
+  for (let word of words) {
+    let testLine = currentLine ? currentLine + " " + word : word;
+    if (textWidth(testLine) > maxWidth && currentLine.length > 0) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine.length > 0) lines.push(currentLine);
+  pop();
+  return lines;
+}
+
+// Starts a new dialogue sequence with the given lines.
+function startDialogue(lines) {
+  dialogueActive = true;
+  dialogueIndex = 0;
+  dialogueCharIndex = 0;
+  dialoguePageOffset = 0;
+  dialogueFrameCounter = 0;
+
+  let line = lines[0];
+  let padTop = 45;
+  let padBottom = 45;
+  let textAreaH = 200 * 0.95 - padTop - padBottom;
+  dialogueLinesPerPage = floor(textAreaH / 40);
+
+  // Trigger screen shake for the BIG SPLASH line if it's the first line
+  if (line.text === "*BIG SPLASH*") {
+    screenShakeIntensity = 8;
+    screenShakeTimer = 30;
+  }
+}
+
+// Handles Enter key during dialogue: finish typing or advance to next line.
+function advanceDialogue() {
+  if (!dialogueActive || dialogueIndex >= INTRO_DIALOGUE.length) return;
+
+  let line = INTRO_DIALOGUE[dialogueIndex];
+  let isChar = line.speaker === "PARROT" || line.speaker === "PLAYER";
+  let padLeft = isChar ? 100 : 45;
+  let padRight = 45;
+  let boxW = (CANVAS_WIDTH - 80) * 0.95;
+  let maxTextW = boxW - padLeft - padRight;
+  let wrappedLines = wrapTextForDialogue(line.text, maxTextW);
+
+  if (dialogueCharIndex < line.text.length) {
+    // Still typing — finish instantly
+    dialogueCharIndex = line.text.length;
+    dialoguePageOffset = 0;
+  } else {
+    // Fully typed — check for more pages
+    if (dialoguePageOffset + dialogueLinesPerPage < wrappedLines.length) {
+      dialoguePageOffset += dialogueLinesPerPage;
+    } else {
+      // Move to next dialogue line
+      dialogueIndex++;
+      if (dialogueIndex >= INTRO_DIALOGUE.length) {
+        // Dialogue finished
+        dialogueActive = false;
+        dialogueCompleted = true;
+        return;
+      }
+      dialogueCharIndex = 0;
+      dialoguePageOffset = 0;
+      dialogueFrameCounter = 0;
+
+      // Check for special effects on the new line
+      let nextLine = INTRO_DIALOGUE[dialogueIndex];
+      if (nextLine.text === "*BIG SPLASH*") {
+        screenShakeIntensity = 8;
+        screenShakeTimer = 30;
+      }
+    }
+  }
+}
+
+// Draws the dialogue box in screen-space at the bottom of the screen.
+function drawDialogueBox() {
+  if (!dialogueActive || dialogueIndex >= INTRO_DIALOGUE.length) return;
+
+  let line = INTRO_DIALOGUE[dialogueIndex];
+  let img = currentDialogueImage(line.speaker);
+  let isCharacter = line.speaker === "PARROT" || line.speaker === "PLAYER";
+
+  // Box dimensions (scaled to 0.95, top edge pinned)
+  let boxW = (CANVAS_WIDTH - 80) * 0.95;
+  let boxH = 200 * 0.95;
+  let boxX = (CANVAS_WIDTH - boxW) / 2;
+  let boxY = CANVAS_HEIGHT - 200; // keep original top Y
+
+  // Draw background image
+  push();
+  imageMode(CORNER);
+  image(img, boxX, boxY, boxW, boxH);
+  pop();
+
+  // Text area padding — leave breathing room for centering
+  let padLeft = isCharacter ? 220 : 75;
+  let padRight = 45;
+  let padTop = 45;
+  let padBottom = 45;
+
+  // Horizontally center: draw at the midpoint of the text area
+  let maxTextW = boxW - padLeft - padRight;
+  let textX = boxX + padLeft;
+  let textY = boxY + padTop; // vertOffset added after wrapping below
+
+  // Wrap text into visual lines
+  let wrappedLines = wrapTextForDialogue(line.text, maxTextW);
+
+  // Vertically center based on how many lines fit on this page
+  let textAreaH = boxH - padTop - padBottom;
+  let pageLineCount = min(
+    wrappedLines.length - dialoguePageOffset,
+    dialogueLinesPerPage,
+  );
+  let actualTextHeight = pageLineCount * 40;
+  let vertOffset = max(0, (textAreaH - actualTextHeight) / 2);
+  textY += vertOffset;
+
+  // Typewriter effect — advance one character every ~2 frames
+  dialogueFrameCounter++;
+  if (dialogueFrameCounter >= DIALOGUE_FRAMES_PER_CHAR) {
+    dialogueFrameCounter = 0;
+    if (dialogueCharIndex < line.text.length) {
+      dialogueCharIndex++;
+    }
+  }
+
+  // Build cumulative character counts per wrapped line
+  let cumChars = [];
+  let cum = 0;
+  for (let i = 0; i < wrappedLines.length; i++) {
+    cum += wrappedLines[i].length;
+    cumChars.push(cum);
+  }
+
+  // Determine which lines to show on the current page,
+  // clipped by the typewriter character count.
+  let charsConsumed =
+    dialoguePageOffset > 0 ? cumChars[dialoguePageOffset - 1] : 0;
+  let visibleLines = [];
+  for (
+    let i = dialoguePageOffset;
+    i < min(dialoguePageOffset + dialogueLinesPerPage, wrappedLines.length);
+    i++
+  ) {
+    let lineLen = wrappedLines[i].length;
+    if (dialogueCharIndex <= charsConsumed) break;
+    let showChars = min(dialogueCharIndex - charsConsumed, lineLen);
+    visibleLines.push(wrappedLines[i].substring(0, showChars));
+    charsConsumed += lineLen;
+  }
+
+  // Text shake for "Then who's at the helm??"
+  let shakeX = 0;
+  let shakeY = 0;
+  if (
+    line.text === "Then who's at the helm??" &&
+    dialogueCharIndex >= line.text.length
+  ) {
+    shakeX = random(-1.5, 1.5);
+    shakeY = random(-1.5, 1.5);
+  }
+
+  // Draw text — left-aligned, block is vertically/horizontally centered
+  push();
+  textFont("Pixelify Sans");
+  textSize(30);
+  textLeading(40);
+  fill(60, 40, 20);
+  noStroke();
+  for (let i = 0; i < visibleLines.length; i++) {
+    text(visibleLines[i], textX + shakeX, textY + i * 40 + shakeY);
+  }
+  pop();
+
+  // Advance indicator when fully typed and on the last page
+  let fullyTyped = dialogueCharIndex >= line.text.length;
+  let lastPage =
+    dialoguePageOffset + dialogueLinesPerPage >= wrappedLines.length;
+  if (fullyTyped && lastPage) {
+    let arrowAlpha = 160 + sin(frameCount * 0.1) * 60;
+    push();
+    textFont("Pixelify Sans");
+    textSize(14);
+    fill(60, 40, 20, arrowAlpha);
+    textAlign(RIGHT, BOTTOM);
+    text("▼", boxX + boxW - 24, boxY + boxH - 14);
+    pop();
+  }
 }
 
 // Interactive ship-deck tutorial — camera starts wherever the splash shot
@@ -611,9 +920,21 @@ function drawIntroScreen() {
     // the framing slides as one, not player-tracking yet.
     camera.x = lerp(camera.x, INTRO_FULL_VIEW.x, INTRO_ZOOM_OUT_SMOOTHING);
     camera.y = lerp(camera.y, INTRO_FULL_VIEW.y, INTRO_ZOOM_OUT_SMOOTHING);
-    introView.anchorX = lerp(introView.anchorX, INTRO_FULL_VIEW.x, INTRO_ZOOM_OUT_SMOOTHING);
-    introView.anchorY = lerp(introView.anchorY, INTRO_FULL_VIEW.y, INTRO_ZOOM_OUT_SMOOTHING);
-    introView.zoom = lerp(introView.zoom, INTRO_FULL_VIEW_ZOOM, INTRO_ZOOM_OUT_SMOOTHING);
+    introView.anchorX = lerp(
+      introView.anchorX,
+      INTRO_FULL_VIEW.x,
+      INTRO_ZOOM_OUT_SMOOTHING,
+    );
+    introView.anchorY = lerp(
+      introView.anchorY,
+      INTRO_FULL_VIEW.y,
+      INTRO_ZOOM_OUT_SMOOTHING,
+    );
+    introView.zoom = lerp(
+      introView.zoom,
+      INTRO_FULL_VIEW_ZOOM,
+      INTRO_ZOOM_OUT_SMOOTHING,
+    );
     logoAlpha = lerp(logoAlpha, 0, INTRO_ZOOM_OUT_SMOOTHING);
     if (logoAlpha < 1) logoAlpha = 0;
 
@@ -640,7 +961,11 @@ function drawIntroScreen() {
       INTRO_CAMERA_ANCHOR.y,
       INTRO_PAN_SMOOTHING,
     );
-    introView.zoom = lerp(introView.zoom, INTRO_TUTORIAL_ZOOM, INTRO_PAN_SMOOTHING);
+    introView.zoom = lerp(
+      introView.zoom,
+      INTRO_TUTORIAL_ZOOM,
+      INTRO_PAN_SMOOTHING,
+    );
 
     let prevCamX = camera.x;
     let prevCamY = camera.y;
@@ -669,8 +994,32 @@ function drawIntroScreen() {
       introView.anchorY,
       introView.zoom,
     );
+
+    // Start dialogue once the camera has settled
+    if (!dialogueActive && !dialogueCompleted) {
+      startDialogue(INTRO_DIALOGUE);
+    }
   }
+
+  // Apply screen shake offset to camera before rendering
+  let shakeX = 0;
+  let shakeY = 0;
+  if (screenShakeTimer > 0) {
+    shakeX = random(-screenShakeIntensity, screenShakeIntensity);
+    shakeY = random(-screenShakeIntensity, screenShakeIntensity);
+    screenShakeTimer--;
+    if (screenShakeTimer <= 0) {
+      screenShakeIntensity = 0;
+    }
+  }
+  camera.x += shakeX;
+  camera.y += shakeY;
+
   beginCameraView(introView.zoom, introView.anchorX, introView.anchorY);
+
+  // Restore camera after applying shake
+  camera.x -= shakeX;
+  camera.y -= shakeY;
 
   drawIntroWorld();
   checkIntroDoor();
@@ -679,20 +1028,29 @@ function drawIntroScreen() {
   if (introDelayTimer > 0) {
     introDelayTimer--;
     if (introDelayTimer === 0) {
+      dialogueActive = false;
+      dialogueCompleted = true;
       loadLevel(0);
       gameState = STATE.PLAYING;
+      updateSounds(); // switch from seagulls to BGM
     }
   }
 
-  // Player physics (runs every frame in STATE.START)
-  handleInput();
+  // Player physics — skip input when dialogue is active
+  if (!dialogueActive) {
+    handleInput();
+  }
   resolveIntroCollisions();
   applyIntroPhysics();
   clampToBounds();
   animateSprite();
-
   drawCharacter();
   endCameraView();
+
+  // Draw dialogue box in screen-space (after camera view ends)
+  if (dialogueActive) {
+    drawDialogueBox();
+  }
 
   // Logo fades out during the zoom-out leg instead of vanishing the
   // instant the splash screen ends.
@@ -1292,6 +1650,12 @@ function drawLoseScreen() {
 }
 
 function keyPressed() {
+  // Dialogue intercept — must come before any other state handler
+  if (dialogueActive) {
+    advanceDialogue();
+    return;
+  }
+
   if (gameState === STATE.SPLASH) {
     if (keyCode === ENTER) {
       // Camera stays right where the splash shot left it — drawIntroScreen()
@@ -1299,6 +1663,7 @@ function keyPressed() {
       // tutorial framing on the player.
       introPhase = "zoomOut";
       gameState = STATE.START;
+      updateSounds();
     }
   } else if (gameState === STATE.PLAYING) {
     if (keyCode === 78) {
