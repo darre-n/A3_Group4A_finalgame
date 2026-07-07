@@ -196,6 +196,190 @@ let dialogueLinesPerPage = 6;
 let dialogueFrameCounter = 0;
 const DIALOGUE_FRAMES_PER_CHAR = 2;
 
+// ── Level tutorial barks ────────────────────────────────────────────────────
+// Short tips that pop up during actual gameplay. Unlike the intro's
+// dialogueActive, these don't pause the world (hazards/seasickness keep
+// running underneath) — but the player does have to press Enter to advance
+// or dismiss them, same as the intro dialogue, and a bark can optionally
+// block movement input specifically (see blocksMovement below) so the
+// player isn't forced to read while also dodging something.
+//
+// IMPORTANT: this box uses the exact same fixed geometry as the intro's
+// drawDialogueBox() (LEVEL_BARK_BOX_H, same padding/font). Do NOT grow the
+// box to fit longer text -- that stretches the border art unevenly. If a
+// tip doesn't fit in LEVEL_BARK_LINES_PER_PAGE lines, it paginates across
+// multiple Enter-advanced pages instead.
+const LEVEL_BARK_BOX_H = 200 * 0.95;
+const LEVEL_BARK_LINES_PER_PAGE = 2;
+
+let levelBark = null; // { speaker, wrappedLines, blocksMovement } or null
+let levelBarkPage = 0;
+
+function showLevelBark(speaker, text, blocksMovement = false) {
+  let isChar = speaker === "PARROT" || speaker === "PLAYER";
+  let boxW = (CANVAS_WIDTH - 80) * 0.95;
+  let padLeft = isChar ? 220 : 75;
+  let padRight = 45;
+  let maxTextW = boxW - padLeft - padRight;
+  levelBark = {
+    speaker,
+    wrappedLines: wrapTextForDialogue(text, maxTextW),
+    blocksMovement,
+  };
+  levelBarkPage = 0;
+}
+
+// Handles Enter key while a level bark is showing: advance to the next
+// page, or dismiss it entirely once the last page's been read.
+function advanceLevelBark() {
+  if (!levelBark) return;
+  let pageCount = ceil(
+    levelBark.wrappedLines.length / LEVEL_BARK_LINES_PER_PAGE,
+  );
+  if (levelBarkPage + 1 < pageCount) {
+    levelBarkPage++;
+  } else {
+    levelBark = null;
+  }
+}
+
+// Level 1 specific: which one-shot tips have already fired.
+let level1BarrelBarkShown = false;
+let level1LanternBarkShown = false;
+let level1HelmBarkShown = false;
+let level1HasBeenSeasick = false; // gates the "get to the helm" bark so it can't fire at 0 seasickness before the player has ever actually gotten sick
+
+function resetLevel1Tutorial() {
+  level1BarrelBarkShown = false;
+  level1LanternBarkShown = false;
+  level1HelmBarkShown = false;
+  level1HasBeenSeasick = false;
+  levelBark = null;
+  levelBarkPage = 0;
+}
+
+// Checks proximity/state triggers for the three Level 1 tips. Call once per
+// frame while gameState === STATE.PLAYING.
+function updateLevel1Tutorial() {
+  if (currentLevel !== 0) return;
+
+  if (player.seasickness >= 15) level1HasBeenSeasick = true;
+
+  // Barrel-jumping tip — near the starter barrel stack just past spawn.
+  if (!level1BarrelBarkShown) {
+    let nearBarrels = abs(player.x - 268) < 120 && abs(player.y - 232) < 100;
+    if (nearBarrels) {
+      showLevelBark(
+        "PARROT",
+        "Use those feet of yours and jump over those barrels!",
+      );
+      level1BarrelBarkShown = true;
+    }
+  }
+
+  // Lantern tip — near the first lantern the player actually reaches.
+  // LANTERNS[0][0] is the correct one: the existing "barrel under second
+  // lantern" comment on the LEVELS[0] platform list already establishes
+  // LANTERNS[0][1] as the SECOND lantern, so [0] is the first. Blocks
+  // movement since it's a longer read the player needs to actually stop for.
+  if (!level1LanternBarkShown) {
+    let firstLantern = LANTERNS[0][0];
+    let nearLantern =
+      abs(player.x - firstLantern.x) < 50 &&
+      abs(player.y - firstLantern.y) < 50;
+    if (nearLantern) {
+      showLevelBark(
+        "PARROT",
+        "You're new to this shindig, so you're gonna keep getting more seasick. Get to the lanterns to take a break. The dark makes you feel less nauseous.",
+        true,
+      );
+
+      level1LanternBarkShown = true;
+    }
+  }
+
+  // "Get to the helm" tip — once seasickness has fully recovered at a lantern.
+  if (
+    level1LanternBarkShown &&
+    !level1HelmBarkShown &&
+    level1HasBeenSeasick &&
+    darkMode &&
+    player.seasickness <= 0.5
+  ) {
+    showLevelBark(
+      "PARROT",
+      "No point staying there too long though. Get to the helm!",
+    );
+    level1HelmBarkShown = true;
+  }
+}
+
+// Draws the active level bark, if any — same box art as the intro dialogue,
+// but sized to fit its (untruncated, un-paginated) text and floated a little
+// above the very bottom edge so it doesn't sit flush against the screen.
+function drawLevelBark() {
+  if (!levelBark) return;
+
+  let isChar = levelBark.speaker === "PARROT" || levelBark.speaker === "PLAYER";
+  let img = currentDialogueImage(levelBark.speaker);
+
+  // Same fixed box geometry as the intro's drawDialogueBox() — see the
+  // comment above showLevelBark() for why this doesn't grow to fit text.
+  let boxW = (CANVAS_WIDTH - 80) * 0.95;
+  let boxH = LEVEL_BARK_BOX_H;
+  let boxX = (CANVAS_WIDTH - boxW) / 2;
+  let boxY = CANVAS_HEIGHT - 200;
+  let padLeft = isChar ? 220 : 75;
+  let padTop = 45;
+
+  push();
+  imageMode(CORNER);
+  image(img, boxX, boxY, boxW, boxH);
+  pop();
+
+  // Explicitly set textAlign here rather than relying on whatever the
+  // ambient state happens to be — drawHUD() (called right before this)
+  // leaves it at (RIGHT, TOP) for its seasickness label and never resets
+  // it, which previously made this text anchor from the wrong edge.
+  push();
+  textFont("Pixelify Sans");
+  textSize(30);
+  textLeading(40);
+  textAlign(LEFT, TOP);
+  fill(60, 40, 20);
+  noStroke();
+  let start = levelBarkPage * LEVEL_BARK_LINES_PER_PAGE;
+  let end = min(
+    start + LEVEL_BARK_LINES_PER_PAGE,
+    levelBark.wrappedLines.length,
+  );
+  for (let i = start; i < end; i++) {
+    let segments = parseStyledSegments(levelBark.wrappedLines[i]);
+    drawStyledLine(segments, boxX + padLeft, boxY + padTop + (i - start) * 40);
+  }
+  pop();
+
+  // Page counter instead of a "hit enter" prompt, since these auto-advance —
+  // only shown when there's actually more than one page.
+  let pageCount = ceil(
+    levelBark.wrappedLines.length / LEVEL_BARK_LINES_PER_PAGE,
+  );
+  if (pageCount > 1) {
+    push();
+    textFont("Pixelify Sans");
+    textSize(14);
+    textAlign(RIGHT, BOTTOM);
+    fill(60, 40, 20, 160);
+    noStroke();
+    text(
+      `${levelBarkPage + 1}/${pageCount}`,
+      boxX + boxW - 24,
+      boxY + boxH - 14,
+    );
+    pop();
+  }
+}
+
 // ── Intro / start-screen ship scene ────────────────────────────────────────
 const INTRO = {
   // The deck platform the player stands on (tiled with platform_tile.png)
@@ -225,37 +409,40 @@ const INTRO = {
 // ── Intro dialogue lines ────────────────────────────────────────────────────
 const INTRO_DIALOGUE = [
   { speaker: "PARROT", text: "*SQUAWK* Quiet morning… Hm…" },
-  { speaker: "PLAYER", text: "What are you on about?" },
   {
-    speaker: "DIALOGUE",
-    text: "Harmonious singing echoes from the end of the ship, the [redacted]",
+    speaker: "PLAYER",
+    text: "Good... morning... eurgh... is that singing I hear?",
   },
   {
     speaker: "DIALOGUE",
-    text: "It grows in volume, ringing through your head, but you can hardly think.",
+    text: "♪ Harmonious singing echoes from the stern of the Swift Claudia.",
+  },
+  {
+    speaker: "DIALOGUE",
+    text: "It feels like you're being drawn in... are those sirens?",
   },
   { speaker: "DIALOGUE", text: "*THUMP THUMP*" },
   { speaker: "DIALOGUE", text: "*BIG SPLASH*" },
-  { speaker: "PLAYER", text: "Wait wuh? What was that?" },
+  { speaker: "PLAYER", text: "What was that??" },
   {
     speaker: "PARROT",
-    text: "*CAW CAW* Sirens spotted at starboard, crew gone overboard!",
+    text: "*CAW CAW* Sirens spotted at starboard. Crew gone overboard!",
   },
-  { speaker: "PLAYER", text: "Wait, what? Everyone?" },
-  { speaker: "PLAYER", text: "…" },
-  { speaker: "PLAYER", text: "Then who's at the helm??" },
+  { speaker: "PLAYER", text: "Wait... everyone?" },
+  { speaker: "PLAYER", text: "_Then who's at the helm??_" },
   {
     speaker: "PARROT",
-    text: "*CAW* No one, you empty bucket! It's time to earn your sea legs!",
-  },
-  {
-    speaker: "PARROT",
-    text: "What are you waiting for? Get to the helm before we feed the fish!",
+    text: "No one, you empty bucket!",
   },
   {
     speaker: "PARROT",
-    text: "Use A <- and D -> to move left and right, and space to jump.",
+    text: "Time to steer this beauty home before we feed the fish!",
   },
+  {
+    speaker: "PARROT",
+    text: "Use **A and D** to move, and **SPACE** to jump.",
+  },
+  { speaker: "PARROT", text: "Time to earn your sea legs, swashbuckler!" },
   { speaker: "PLAYER", text: "Argh, but I'm gonna get so seasick!" },
 ];
 
@@ -304,7 +491,7 @@ let logoAlpha = 255;
 
 const LEVELS = [
   {
-    name: "Level 1 — Learning",
+    name: "LEVEL 1 — LEARNING THE ROPES",
     background: "assets/images/lvl1background.png",
     backgroundColor: [150, 75, 0],
     start: { x: 40, y: 200 },
@@ -399,8 +586,10 @@ let imgPlatformTile;
 let imgDialogueGeneric;
 let imgDialogueParrot;
 let imgDialoguePirate;
+let imgSign;
 let soundBGM;
 let soundSeagulls;
+let soundSplash;
 let exitDoorOpen = false;
 let introDoorOpen = false;
 let winDelayTimer = 0;
@@ -422,8 +611,10 @@ function preload() {
   imgDialogueGeneric = loadImage("assets/images/dialogue.png");
   imgDialogueParrot = loadImage("assets/images/parrot_dialogue.png");
   imgDialoguePirate = loadImage("assets/images/pirate_dialogue.png");
+  imgSign = loadImage("assets/images/sign.png");
   soundBGM = loadSound("assets/sounds/bgm.mp3");
   soundSeagulls = loadSound("assets/sounds/seagulls.mp3");
+  soundSplash = loadSound("assets/sounds/splash.mp3");
 
   for (let i = 0; i < LEVELS.length; i++) {
     if (LEVELS[i].background) {
@@ -683,16 +874,24 @@ function drawSplashScreen() {
   push();
   imageMode(CORNER);
   let logoH = INTRO_LOGO.w * (imgLogo.height / imgLogo.width);
-  image(imgLogo, INTRO_LOGO.x, INTRO_LOGO.y, INTRO_LOGO.w, logoH);
+  image(imgLogo, INTRO_LOGO.x - 30, INTRO_LOGO.y, INTRO_LOGO.w, logoH);
+  pop();
+
+  // Wooden sign behind the prompt, centered on the same point as the text.
+  push();
+  imageMode(CENTER);
+  let signW = 380;
+  let signH = signW * (imgSign.height / imgSign.width);
+  image(imgSign, CANVAS_WIDTH / 2 - 240, CANVAS_HEIGHT - 250, signW, signH);
   pop();
 
   push();
   textAlign(CENTER, CENTER);
-  textSize(34);
+  textSize(26);
   strokeWeight(6);
-  stroke(0);
+  stroke(62, 39, 49);
   fill(255);
-  text("Press ENTER to start", CANVAS_WIDTH / 2 - 200, CANVAS_HEIGHT - 300);
+  text("PRESS 'ENTER' TO START", CANVAS_WIDTH / 2 - 240, CANVAS_HEIGHT - 250);
   pop();
 }
 
@@ -703,6 +902,58 @@ function currentDialogueImage(speaker) {
   if (speaker === "PARROT") return imgDialogueParrot;
   if (speaker === "PLAYER") return imgDialoguePirate;
   return imgDialogueGeneric;
+}
+
+// Strips **bold** and _italic_ markup for width measurement.
+function stripMarkup(text) {
+  return text.replace(/\*\*(.+?)\*\*/g, "$1").replace(/_(.+?)_/g, "$1");
+}
+
+// Parses inline markup into { text, style } segments.
+function parseStyledSegments(text) {
+  const re = /\*\*(.+?)\*\*|_(.+?)_/g;
+  let segments = [];
+  let last = 0;
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > last) {
+      segments.push({ text: text.slice(last, match.index), style: NORMAL });
+    }
+    if (match[1] !== undefined) {
+      segments.push({ text: match[1], style: BOLD });
+    } else if (match[2] !== undefined) {
+      segments.push({ text: match[2], style: ITALIC });
+    }
+    last = re.lastIndex;
+  }
+  if (last < text.length) {
+    segments.push({ text: text.slice(last), style: NORMAL });
+  }
+  return segments.length > 0 ? segments : [{ text, style: NORMAL }];
+}
+
+// Draws styled segments left-to-right at (x,y). Resets style after.
+// Simulates bold/italic via render tricks since the font may only
+// have a regular weight loaded (no bold/italic variants).
+function drawStyledLine(segments, x, y) {
+  let cx = x;
+  for (let seg of segments) {
+    if (seg.style === BOLD) {
+      // Faux bold: draw twice with a 1px horizontal offset
+      text(seg.text, cx, y);
+      text(seg.text, cx + 1, y);
+    } else if (seg.style === ITALIC) {
+      // Faux italic: shear transform
+      push();
+      translate(cx, y);
+      shearX(-0.22);
+      text(seg.text, 0, 0);
+      pop();
+    } else {
+      text(seg.text, cx, y);
+    }
+    cx += textWidth(seg.text);
+  }
 }
 
 // Wraps text into lines that fit within maxWidth using the dialogue font.
@@ -716,7 +967,7 @@ function wrapTextForDialogue(txt, maxWidth) {
 
   for (let word of words) {
     let testLine = currentLine ? currentLine + " " + word : word;
-    if (textWidth(testLine) > maxWidth && currentLine.length > 0) {
+    if (textWidth(stripMarkup(testLine)) > maxWidth && currentLine.length > 0) {
       lines.push(currentLine);
       currentLine = word;
     } else {
@@ -742,11 +993,24 @@ function startDialogue(lines) {
   let textAreaH = 200 * 0.95 - padTop - padBottom;
   dialogueLinesPerPage = floor(textAreaH / 40);
 
-  // Trigger screen shake for the BIG SPLASH line if it's the first line
+  // Trigger screen shake and splash sound for the BIG SPLASH line
   if (line.text === "*BIG SPLASH*") {
     screenShakeIntensity = 8;
     screenShakeTimer = 30;
+    soundSplash.play();
   }
+}
+
+// Word-wraps a dialogue line the same way it's rendered, so callers that
+// need to know the line count (paging in advanceDialogue(), centering in
+// drawDialogueBox()) can never disagree with what's actually drawn.
+function getWrappedDialogueLines(line) {
+  let isChar = line.speaker === "PARROT" || line.speaker === "PLAYER";
+  let boxW = (CANVAS_WIDTH - 80) * 0.95;
+  let padLeft = isChar ? 220 : 75;
+  let padRight = 45;
+  let maxTextW = boxW - padLeft - padRight;
+  return wrapTextForDialogue(line.text, maxTextW);
 }
 
 // Handles Enter key during dialogue: finish typing or advance to next line.
@@ -754,12 +1018,7 @@ function advanceDialogue() {
   if (!dialogueActive || dialogueIndex >= INTRO_DIALOGUE.length) return;
 
   let line = INTRO_DIALOGUE[dialogueIndex];
-  let isChar = line.speaker === "PARROT" || line.speaker === "PLAYER";
-  let padLeft = isChar ? 100 : 45;
-  let padRight = 45;
-  let boxW = (CANVAS_WIDTH - 80) * 0.95;
-  let maxTextW = boxW - padLeft - padRight;
-  let wrappedLines = wrapTextForDialogue(line.text, maxTextW);
+  let wrappedLines = getWrappedDialogueLines(line);
 
   if (dialogueCharIndex < line.text.length) {
     // Still typing — finish instantly
@@ -787,6 +1046,7 @@ function advanceDialogue() {
       if (nextLine.text === "*BIG SPLASH*") {
         screenShakeIntensity = 8;
         screenShakeTimer = 30;
+        soundSplash.play();
       }
     }
   }
@@ -814,17 +1074,16 @@ function drawDialogueBox() {
 
   // Text area padding — leave breathing room for centering
   let padLeft = isCharacter ? 220 : 75;
-  let padRight = 45;
   let padTop = 45;
   let padBottom = 45;
 
   // Horizontally center: draw at the midpoint of the text area
-  let maxTextW = boxW - padLeft - padRight;
   let textX = boxX + padLeft;
   let textY = boxY + padTop; // vertOffset added after wrapping below
 
-  // Wrap text into visual lines
-  let wrappedLines = wrapTextForDialogue(line.text, maxTextW);
+  // Wrap text into visual lines — same calculation advanceDialogue() uses
+  // for paging, so the two can never disagree about the line count.
+  let wrappedLines = getWrappedDialogueLines(line);
 
   // Vertically center based on how many lines fit on this page
   let textAreaH = boxH - padTop - padBottom;
@@ -881,15 +1140,19 @@ function drawDialogueBox() {
     shakeY = random(-1.5, 1.5);
   }
 
-  // Draw text — left-aligned, block is vertically/horizontally centered
+  // Draw text — left-aligned, block is vertically/horizontally centered.
+  // textAlign is set explicitly (not left to ambient state) — see the
+  // comment in drawLevelBark() for why that matters.
   push();
   textFont("Pixelify Sans");
   textSize(30);
   textLeading(40);
+  textAlign(LEFT, TOP);
   fill(60, 40, 20);
   noStroke();
   for (let i = 0; i < visibleLines.length; i++) {
-    text(visibleLines[i], textX + shakeX, textY + i * 40 + shakeY);
+    let segments = parseStyledSegments(visibleLines[i]);
+    drawStyledLine(segments, textX + shakeX, textY + i * 40 + shakeY);
   }
   pop();
 
@@ -1088,7 +1351,8 @@ function draw() {
     drawLantern();
     drawDoors();
     updateLantern();
-    if (darkMode) {
+    updateLevel1Tutorial();
+    if (darkMode || (levelBark && levelBark.blocksMovement)) {
       player.isMoving = false;
     } else {
       handleInput();
@@ -1117,6 +1381,7 @@ function draw() {
     drawCharacter();
     endCameraView();
     drawHUD();
+    drawLevelBark();
   } else if (gameState === STATE.FAINTING) {
     updateCamera();
     beginCameraView();
@@ -1162,6 +1427,10 @@ function loadLevel(index) {
 
   exitDoorOpen = false;
   winDelayTimer = 0;
+
+  if (index === 0) {
+    resetLevel1Tutorial();
+  }
 
   resetCamera();
 }
@@ -1537,12 +1806,18 @@ function drawCharacter() {
 }
 
 function drawHUD() {
+  // Wrap the whole function so its fill/stroke/textAlign/textSize changes
+  // (notably textAlign(RIGHT, TOP) for the seasickness label) can't leak
+  // into whatever draws next in the same frame — this previously broke
+  // drawLevelBark()'s text alignment since nothing here reset it.
+  push();
+
   // level name
-  textSize(16);
+  textSize(20);
   textAlign(LEFT, TOP);
-  strokeWeight(3);
-  stroke(0);
-  fill(0);
+  strokeWeight(5);
+  stroke(62, 39, 49);
+  fill(255);
   text(LEVELS[currentLevel].name, 16, 16);
   noStroke();
   fill(255);
@@ -1556,20 +1831,17 @@ function drawHUD() {
   let fill_pct = player.seasickness / SEASICK_MAX;
 
   // label — black outline, white fill
-  textSize(12);
+  textSize(20);
   textAlign(RIGHT, TOP);
-  strokeWeight(3);
-  stroke(0);
-  fill(0);
-  text("SEASICKNESS", meterX - 4, meterY + 2);
-  noStroke();
+  strokeWeight(5);
+  stroke(62, 39, 49);
   fill(255);
-  text("SEASICKNESS", meterX - 4, meterY + 2);
+  text("SEASICKNESS", meterX - 6, meterY + 2);
 
   // background bar
-  noFill();
-  stroke(0);
-  strokeWeight(3);
+  fill(90, 105, 136);
+  stroke(192, 203, 220);
+  strokeWeight(5);
   rect(meterX, meterY, meterW, meterH, 4);
 
   // filled portion — green → yellow → red
@@ -1591,6 +1863,8 @@ function drawHUD() {
     line(mx, meterY + 1, mx, meterY + meterH - 1);
   }
   noStroke();
+
+  pop();
 }
 
 function drawStartScreen() {
@@ -1653,6 +1927,14 @@ function keyPressed() {
   // Dialogue intercept — must come before any other state handler
   if (dialogueActive) {
     advanceDialogue();
+    return;
+  }
+
+  // Level barks only intercept Enter specifically — unlike the intro
+  // dialogue, other keys (movement, debug level-skip) still pass through,
+  // since barks that don't set blocksMovement shouldn't stall gameplay.
+  if (levelBark && keyCode === ENTER) {
+    advanceLevelBark();
     return;
   }
 
