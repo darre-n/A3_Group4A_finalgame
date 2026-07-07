@@ -870,7 +870,7 @@ function drawSplashScreen() {
   // Wooden sign behind the prompt, centered on the same point as the text.
   push();
   imageMode(CENTER);
-  let signW = 600;
+  let signW = 460;
   let signH = signW * (imgSign.height / imgSign.width);
   image(imgSign, CANVAS_WIDTH / 2 - 200, CANVAS_HEIGHT - 300, signW, signH);
   pop();
