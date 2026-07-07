@@ -197,49 +197,47 @@ let dialogueFrameCounter = 0;
 const DIALOGUE_FRAMES_PER_CHAR = 2;
 
 // ── Level tutorial barks ────────────────────────────────────────────────────
-// Short, non-blocking tips that float up during actual gameplay — unlike the
-// intro's dialogueActive system, these never touch player input, they just
-// show for a while and fade away on their own (or get replaced by the next
-// one that triggers).
+// Short tips that pop up during actual gameplay. Unlike the intro's
+// dialogueActive, these don't pause the world (hazards/seasickness keep
+// running underneath) — but the player does have to press Enter to advance
+// or dismiss them, same as the intro dialogue, and a bark can optionally
+// block movement input specifically (see blocksMovement below) so the
+// player isn't forced to read while also dodging something.
 //
 // IMPORTANT: this box uses the exact same fixed geometry as the intro's
 // drawDialogueBox() (LEVEL_BARK_BOX_H, same padding/font). Do NOT grow the
 // box to fit longer text -- that stretches the border art unevenly. If a
 // tip doesn't fit in LEVEL_BARK_LINES_PER_PAGE lines, it paginates across
-// multiple pages instead, auto-advancing on a timer since there's no Enter
-// press to drive it forward like the intro dialogue has.
+// multiple Enter-advanced pages instead.
 const LEVEL_BARK_BOX_H = 200 * 0.95;
 const LEVEL_BARK_LINES_PER_PAGE = 2;
-const LEVEL_BARK_PAGE_FRAMES = 150; // ~2.5s per page at 60fps
 
-let levelBark = null; // { speaker, wrappedLines } or null when nothing showing
+let levelBark = null; // { speaker, wrappedLines, blocksMovement } or null
 let levelBarkPage = 0;
-let levelBarkPageTimer = 0;
 
-function showLevelBark(speaker, text) {
+function showLevelBark(speaker, text, blocksMovement = false) {
   let isChar = speaker === "PARROT" || speaker === "PLAYER";
   let boxW = (CANVAS_WIDTH - 80) * 0.95;
   let padLeft = isChar ? 220 : 75;
   let padRight = 45;
   let maxTextW = boxW - padLeft - padRight;
-  levelBark = { speaker, wrappedLines: wrapTextForDialogue(text, maxTextW) };
+  levelBark = {
+    speaker,
+    wrappedLines: wrapTextForDialogue(text, maxTextW),
+    blocksMovement,
+  };
   levelBarkPage = 0;
-  levelBarkPageTimer = LEVEL_BARK_PAGE_FRAMES;
 }
 
-function updateLevelBark() {
+// Handles Enter key while a level bark is showing: advance to the next
+// page, or dismiss it entirely once the last page's been read.
+function advanceLevelBark() {
   if (!levelBark) return;
-  levelBarkPageTimer--;
-  if (levelBarkPageTimer <= 0) {
-    let pageCount = ceil(
-      levelBark.wrappedLines.length / LEVEL_BARK_LINES_PER_PAGE,
-    );
-    if (levelBarkPage + 1 < pageCount) {
-      levelBarkPage++;
-      levelBarkPageTimer = LEVEL_BARK_PAGE_FRAMES;
-    } else {
-      levelBark = null;
-    }
+  let pageCount = ceil(levelBark.wrappedLines.length / LEVEL_BARK_LINES_PER_PAGE);
+  if (levelBarkPage + 1 < pageCount) {
+    levelBarkPage++;
+  } else {
+    levelBark = null;
   }
 }
 
@@ -256,7 +254,6 @@ function resetLevel1Tutorial() {
   level1HasBeenSeasick = false;
   levelBark = null;
   levelBarkPage = 0;
-  levelBarkPageTimer = 0;
 }
 
 // Checks proximity/state triggers for the three Level 1 tips. Call once per
@@ -278,9 +275,13 @@ function updateLevel1Tutorial() {
     }
   }
 
-  // Lantern tip — near the first lantern the player reaches (closest to spawn).
+  // Lantern tip — near the first lantern the player actually reaches.
+  // LANTERNS[0][0] is the correct one: the existing "barrel under second
+  // lantern" comment on the LEVELS[0] platform list already establishes
+  // LANTERNS[0][1] as the SECOND lantern, so [0] is the first. Blocks
+  // movement since it's a longer read the player needs to actually stop for.
   if (!level1LanternBarkShown) {
-    let firstLantern = LANTERNS[0][1];
+    let firstLantern = LANTERNS[0][0];
     let nearLantern =
       abs(player.x - firstLantern.x) < 100 &&
       abs(player.y - firstLantern.y) < 120;
@@ -288,6 +289,7 @@ function updateLevel1Tutorial() {
       showLevelBark(
         "PARROT",
         "You're new to this shindig, so you're gonna keep getting more seasick. Get to the lanterns to take a break. The dark makes you feel less nauseous.",
+        true,
       );
       level1LanternBarkShown = true;
     }
@@ -1274,7 +1276,8 @@ function draw() {
     drawLantern();
     drawDoors();
     updateLantern();
-    if (darkMode) {
+    updateLevel1Tutorial();
+    if (darkMode || (levelBark && levelBark.blocksMovement)) {
       player.isMoving = false;
     } else {
       handleInput();
@@ -1291,8 +1294,6 @@ function draw() {
       }
     }
     updateSeasickness();
-    updateLevel1Tutorial();
-    updateLevelBark();
     resolveHorizontalCollisions();
     applyPhysics();
     clampToBounds();
@@ -1854,6 +1855,14 @@ function keyPressed() {
   // Dialogue intercept — must come before any other state handler
   if (dialogueActive) {
     advanceDialogue();
+    return;
+  }
+
+  // Level barks only intercept Enter specifically — unlike the intro
+  // dialogue, other keys (movement, debug level-skip) still pass through,
+  // since barks that don't set blocksMovement shouldn't stall gameplay.
+  if (levelBark && keyCode === ENTER) {
+    advanceLevelBark();
     return;
   }
 
