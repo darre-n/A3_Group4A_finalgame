@@ -1,6 +1,16 @@
 # Sealegs | Group 4A | Sydney Bernal, Darren Millar, Catherina Yin, Vivian Zhao
 
+## Description
+
 Sealegs is a 2D platformer that tests players to traverse through their ship while experiencing challenges rooted in the real experiences of people with vestibular disorder. Across the first level, players navigate the ship, balancing a constantly increasing seasickness meter that respawns the player at the last checkpoint if its maximum is exceeded. As it increases, the player’s movements meet resistance and traversal difficulty. They must also avoid other obstacles, such as spikes and rats.
+
+## Design Rationale
+
+Sealegs relies on strong perceived affordances and real affordances to teach players how to interact with the world intuitively. The intro screen establishes instability through diegetic cues — the ship shaking, the parrot’s urgency, and the player’s seasickness — priming players to expect environmental challenge. Once gameplay begins, hazards communicate their function through familiar visual language: spikes look dangerous, barrels look like obstacles, and players correctly infer they must jump over them. These perceived affordances align with real consequences, reinforcing trust in the game’s visual logic. The lantern mechanic adds a layered affordance: its warm glow suggests comfort and stability, and players quickly learn it reduces seasickness — but only up to a threshold, teaching them to manage limited relief rather than rely on it fully.
+
+Level 1’s structure follows GameFlow principles by introducing mechanics gradually and reinforcing learning through immediate feedback. The level begins with simple platforming, allowing players to build confidence in movement and timing. Instant resets on failure maintain momentum and reduce frustration, while reaching the helm provides a clear, motivating goal that aligns with the narrative setup.
+
+Vestibular disorder integration is woven directly into the game’s feel rather than treated as decoration. Environmental instability, such as subtle screen shake or uneven platform motion, mirrors real disorientation and challenges spatial judgment. The intro’s seasickness dialogue contextualizes these mechanics, helping players understand why movement may feel unstable. Timing pressure from hazards simulates the difficulty of reacting while dizzy, requiring players to slow down, observe cues, and plan jumps deliberately. These choices ensure the disability meaningfully shapes navigation, pacing, and decision‑making throughout Level 1.
 
 ## Setup and Interaction Instructions
 
@@ -11,6 +21,7 @@ To run the sketch locally, open `index.html` in Google Chrome using Live Server.
 - ‘W’ – move left
 - ‘D’ – move right
 - ‘SPACE’ – jump
+- Press and hold 'E' - turn off the lantern
 - ‘ENTER’ - advance to next dialogue screen
 
 **Opening the Chrome Console**
@@ -46,22 +57,35 @@ Our playtester commented that they thought you could pick up the lantern due to 
 
 Before our final Assignment 3 submission, we will change the colour of our platforms as they were difficult to see against the background colour. This could be disorienting for our players and was not intentional to reflect the experiences of vestibular disorder. We plan to simply make the platforms a solid, lighter brown colour without any pixel colour variance to further reduce any confusion and friction.
 
-## Project Structure
-
-| File / Folder    | Purpose                                        |
-| ---------------- | ---------------------------------------------- |
-| `index.html`     | Page that loads p5.js and the sketch           |
-| `style.css`      | Centres the canvas on the page                 |
-| `sketch.js`      | Game loop, screens, levels, movement           |
-| `assets/images/` | Sprite sheets and level backgrounds            |
-| `assets/sounds/` | Sound effects (background music, splash, etc.) |
-
 ## Assets
 
-| File                            | Source       |
-| ------------------------------- | ------------ |
-| `assets/images/spritesheet.png` | [SOURCE] [1] |
+| File                                 | Source                                                                                                                               |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `assets/images/background_intro.png` | [Drawn by Catherina Yin] [1]                                                                                                         |
+| `assets/images/barrel.png`           | [Drawn by Catherina Yin] [2]                                                                                                         |
+| `assets/images/dialogue.png`         | [Drawn by Catherina Yin] [3]                                                                                                         |
+| `assets/images/doorclose.png`        | [Drawn by Catherina Yin] [4]                                                                                                         |
+| `assets/images/dooropen.png`         | [Drawn by Catherina Yin] [5]                                                                                                         |
+| `assets/images/hammock.png`          | [Drawn by Catherina Yin] [6]                                                                                                         |
+| `assets/images/lantern.png`          | [Drawn by Catherina Yin] [7]                                                                                                         |
+| `assets/images/lvl1background.png`   | [Drawn by Catherina Yin] [8]                                                                                                         |
+| `assets/images/parrot_dialogue.png`  | [Drawn by Catherina Yin] [9]                                                                                                         |
+| `assets/images/pirate_dialogue.png`  | [Drawn by Catherina Yin] [10]                                                                                                        |
+| `assets/images/pirate_sprite.png`    | [Drawn by Catherina Yin] [11]                                                                                                        |
+| `assets/images/platform_tile.png`    | [Drawn by Catherina Yin] [12]                                                                                                        |
+| `assets/images/rat.png`              | [Drawn by Catherina Yin] [13]                                                                                                        |
+| `assets/images/sealegs_logo.png`     | [Drawn by Catherina Yin] [14]                                                                                                        |
+| `assets/images/sign.png`             | [Drawn by Catherina Yin] [15]                                                                                                        |
+| `assets/images/spritesheet.png`      | [Drawn by Catherina Yin] [16]                                                                                                        |
+| `assets/images/title.png`            | [Drawn by Catherina Yin] [17]                                                                                                        |
+| `assets/sounds/seagulls.mp3`         | DRAGON_STUDIO. Seagull Calls - Sourced from https://pixabay.com/sound-effects/nature-seagull-calls-339723/ [18]                      |
+| `assets/sounds/bgm.mp3`              | Magiksolo. Pirate Tavern (Full Version!) - Sourced from https://pixabay.com/music/main-title-pirate-tavern-full-version-167990/ [19] |
+| `assets/sounds/splash.mp3`           | Universfield. Water Splash 02 - Sourced from https://pixabay.com/sound-effects/nature-water-splash-02-352021/ [20]                   |
 
 ## References
 
-[1] [SOURCE]
+[18] DRAGON_STUDIO. n.d. Seagull Calls. Audio. Retrieved July, 6, 2026 from https://pixabay.com/sound-effects/nature-seagull-calls-339723/
+
+[19] Magiksolo. n.d. Pirate Tavern (Full Version!). Audio. Retrieved July, 6, 2026 from https://pixabay.com/music/main-title-pirate-tavern-full-version-167990/
+
+[20] Universfield. n.d. Water Splash 02. Audio. Retrieved July, 6, 2026 from https://pixabay.com/sound-effects/nature-water-splash-02-352021/
