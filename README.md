@@ -6,7 +6,7 @@ Sealegs is a 2D platformer that tests players to traverse through their ship whi
 
 ## Design Rationale
 
-Sealegs teaches players how to interact with the world through both perceived and real affordances. The starting screen crafts a storyline and introduces the main characters and controls while first presenting the seasick concept. Before any mechanics appear, players understand the goal of the game and how to get there. Once gameplay starts, hazards communicate their purpose through familiar shapes. For example, spikes are conventionally dangerous and the barrels look like obstacles, so players naturally assume they should avoid or jump over them. These assumptions match the real consequences and builds players trust in the game’s visual language.
+Sealegs teaches players how to interact with the world through both perceived and real affordances. The starting screen crafts a storyline and introduces the main characters and controls while first presenting the seasick concept. Before any mechanics appear, players understand the goal of the game and how to get there. Once gameplay starts, hazards communicate their purpose through familiar shapes. For example, spikes are conventionally dangerous and the barrels look like obstacles, so players naturally assume they should avoid or jump over them. These assumptions match the real consequences and builds players' trust in the game’s visual language.
 
 The lantern introduces a more nuanced affordance. Players quickly learn it reduces seasickness, but the meter continues to increase once players start moving again. This forces players to be intentional with their movements and be mindful of their jump timing.
 
