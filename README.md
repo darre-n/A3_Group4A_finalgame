@@ -31,8 +31,6 @@ To run the sketch locally, open `index.html` in Google Chrome using Live Server.
 - **Windows:** Press `F12` or `Ctrl + Shift + J`, then click the **Console** tab
 - **Mac:** Press `Cmd + Option + J`
 
-The console will show any errors in your sketch.
-
 ## Iteration Notes
 
 **Post-Playtest**
