@@ -2,7 +2,7 @@
 
 ## Description
 
-Sealegs is a 2D platformer that tests players to traverse through their ship while experiencing challenges rooted in the real experiences of people with vestibular disorder. Across the first level, players navigate the ship, balancing a constantly increasing seasickness meter that respawns the player at the last checkpoint if its maximum is exceeded. As it increases, the player’s movements meet resistance and traversal difficulty. They must also avoid other obstacles, such as spikes and rats.
+Sealegs is a 2D platformer that tests players in traversing through their ship while experiencing challenges rooted in the real experiences of people with vestibular disorders. Across the first level, players navigate the ship, balancing a constantly increasing seasickness meter that respawns the player at the last checkpoint if its maximum is exceeded. As it increases, the player’s movements meet resistance and traversal difficulty. They must also avoid other obstacles, such as spikes and rats.
 
 ## Design Rationale
 
